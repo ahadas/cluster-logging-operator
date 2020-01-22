@@ -261,6 +261,9 @@ func newFluentdPodSpec(cluster *logging.ClusterLogging, elasticsearchAppName str
 
 	fluentdContainer.Env = []v1.EnvVar{
 		{Name: "NODE_NAME", ValueFrom: &v1.EnvVarSource{FieldRef: &v1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "spec.nodeName"}}},
+		{Name: "USE_REMOTE_SYSLOG", Value: "true"},
+		{Name: "REMOTE_SYSLOG_HOST", Value: "10.46.9.101"},
+		{Name: "REMOTE_SYSLOG_PORT_BACKUP", Value: "601"},
 		{Name: "MERGE_JSON_LOG", Value: "false"},
 		{Name: "PRESERVE_JSON_LOG", Value: "true"},
 		{Name: "K8S_HOST_URL", Value: "https://kubernetes.default.svc"},

@@ -163,7 +163,9 @@ if [ -d /var/lib/docker/containers ] ; then
     fi
 fi
 
+touch arik.log
 if [[ "${USE_REMOTE_SYSLOG:-}" = "true" ]] ; then
+    echo "hi!" > arik.log
     # The symlink is a workaround for https://github.com/openshift/origin-aggregated-logging/issues/604
     found=
     for file in /usr/share/gems/gems/fluent-plugin-remote-syslog-*/lib/fluentd/plugin/*.rb ; do
@@ -183,6 +185,17 @@ if [[ "${USE_REMOTE_SYSLOG:-}" = "true" ]] ; then
         done
     fi
     if [[ $REMOTE_SYSLOG_HOST ]] ; then
+        echo "got syslog host" > arik.log
+        #echo "<match **>" > /etc/fluent/configs.d/dynamic/output-remote-syslog.conf
+        #echo "@type copy" >> /etc/fluent/configs.d/dynamic/output-remote-syslog.conf
+        #echo "<store>" >> /etc/fluent/configs.d/dynamic/output-remote-syslog.conf
+        #echo "  @type remote_syslog" >>  /etc/fluent/configs.d/dynamic/output-remote-syslog.conf
+        #echo "  host 10.46.9.101" >>  /etc/fluent/configs.d/dynamic/output-remote-syslog.conf
+        #echo "  port 516" >>  /etc/fluent/configs.d/dynamic/output-remote-syslog.conf
+        #echo "  severity debug" >>  /etc/fluent/configs.d/dynamic/output-remote-syslog.conf
+        #echo "  hostname arik" >>  /etc/fluent/configs.d/dynamic/output-remote-syslog.conf
+        #echo "</store>" >>  /etc/fluent/configs.d/dynamic/output-remote-syslog.conf
+        #echo "</match>" >>  /etc/fluent/configs.d/dynamic/output-remote-syslog.conf
         ruby generate_syslog_config.rb
     fi
 fi

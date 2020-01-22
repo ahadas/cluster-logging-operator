@@ -224,7 +224,7 @@ function deploy_clusterlogging_operator() {
         es_img=registry.svc.ci.openshift.org/ocp/$version:logging-elasticsearch5
         k_img=registry.svc.ci.openshift.org/ocp/$version:logging-kibana5
         c_img=registry.svc.ci.openshift.org/ocp/$version:logging-curator5
-        f_img=registry.svc.ci.openshift.org/ocp/$version:logging-fluentd
+        f_img=quay.io/openshift/origin-logging-fluentd:latest
         op_img=registry.svc.ci.openshift.org/ocp/$version:oauth-proxy
     fi
     sed -e "/name: ELASTICSEARCH_IMAGE/,/value:/s,value:.*\$,value: ${es_img}," \
