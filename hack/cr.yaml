@@ -2,6 +2,8 @@ apiVersion: "logging.openshift.io/v1"
 kind: "ClusterLogging"
 metadata:
   name: "instance"
+  annotations:
+    clusterlogging.openshift.io/logforwardingtechpreview: "enabled"
 spec:
   managementState: "Managed"
   logStore:
@@ -22,3 +24,20 @@ spec:
     logs:
       type: "fluentd"
       fluentd: {}
+---
+apiVersion: "logging.openshift.io/v1alpha1"
+kind: "LogForwarding"
+metadata:
+  name: "instance"
+  namespace: "openshift-logging"
+spec:
+  outputs:
+  - name: syslog
+    type: syslog_buffered
+    endpoint: "10.46.9.101:515"
+    insecure: true
+  pipelines:
+  - name: logsapp
+    inputSource: logs.infra
+    outputRefs:
+    - syslog
