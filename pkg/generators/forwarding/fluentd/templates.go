@@ -14,6 +14,7 @@ var templateRegistry = []string{
 	outputLabelConfNocopyTemplate,
 	storeElasticsearchTemplate,
 	forwardTemplate,
+	storeSyslogTemplate,
 }
 
 const fluentConfTemplate = `{{- define "fluentConf" }}
@@ -551,5 +552,16 @@ const storeElasticsearchTemplate = `{{- define "storeElasticsearch" }}
 		chunk_limit_size "#{ENV['BUFFER_SIZE_LIMIT'] || '8m' }"
 		overflow_action "#{ENV['BUFFER_QUEUE_FULL_ACTION'] || 'block'}"
 	</buffer>
+</store>
+{{- end}}`
+
+const storeSyslogTemplate = `{{- define "storeSyslog" }}
+<store>
+	@type syslog_buffered
+	@id {{.StoreID }}
+	remote_syslog {{.Host}}
+	port {{.Port}}
+	hostname ${hostname}
+	facility local0
 </store>
 {{- end}}`
