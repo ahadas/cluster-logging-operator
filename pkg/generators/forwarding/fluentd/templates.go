@@ -12,6 +12,7 @@ var templateRegistry = []string{
 	sourceToPipelineCopyTemplate,
 	outputLabelConfTemplate,
 	outputLabelConfNocopyTemplate,
+	outputLabelConfNoretryTemplate,
 	storeElasticsearchTemplate,
 	forwardTemplate,
 	storeSyslogTemplate,
@@ -460,6 +461,15 @@ const outputLabelConfTemplate = `{{- define "outputLabelConf" }}
 const outputLabelConfNocopyTemplate = `{{- define "outputLabelConfNoCopy" }}
 <label {{.LabelName}}>
 	<match **>
+{{include .StoreTemplate . "" | indent 4}}
+	</match>
+</label>
+{{- end}}`
+
+const outputLabelConfNoretryTemplate = `{{- define "outputLabelConfNoRetry" }}
+<label {{.LabelName}}>
+	<match **>
+		@type copy
 {{include .StoreTemplate . "" | indent 4}}
 	</match>
 </label>
