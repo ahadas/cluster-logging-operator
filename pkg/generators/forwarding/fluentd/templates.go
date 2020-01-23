@@ -573,5 +573,6 @@ const storeSyslogTemplate = `{{- define "storeSyslog" }}
 	port {{.Port}}
 	hostname ${hostname}
 	facility local0
+	severity debug
 </store>
 {{- end}}`
