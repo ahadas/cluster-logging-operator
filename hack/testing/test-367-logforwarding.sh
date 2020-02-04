@@ -36,22 +36,12 @@ cleanup(){
 }
 trap cleanup exit
 
-# deploy_elasticsearch-operator from marketplace under the assumption it is current and CLO does not depend on any changes
-if [ -n "${DEPLOY_FROM_MARKETPLACE:-}" ] ; then
-  log::info "Deploying elasticsearch-operator from the OLM marketplace"
-  deploy_marketplace_operator "openshift-operators-redhat" "elasticsearch-operator"
-else
-  log::info "Deploying elasticsearch-operator from the vendored manifest"
-  deploy_elasticsearch_operator
-fi
-
 failed=0
-for dir in $(ls -d $TEST_DIR); do
+dir="github.com/openshift/cluster-logging-operator/test/e2e/logforwarding/syslog"
   log::info "=========================================================="
   log::info "Staring test of logforwarding $dir"
   log::info "=========================================================="
   log::info "Deploying cluster-logging-operator"
-  deploy_clusterlogging_operator
   artifact_dir=$ARTIFACT_DIR/$(basename $dir)
   mkdir -p $artifact_dir
   GENERATOR_NS="clo-test-$RANDOM"
@@ -59,6 +49,7 @@ for dir in $(ls -d $TEST_DIR); do
     artifact_dir=$artifact_dir \
     GENERATOR_NS=$GENERATOR_NS \
     ELASTICSEARCH_IMAGE=quay.io/openshift/origin-logging-elasticsearch5:latest \
+    log::info "running test $artifact_dir"
     go test -count=1 -parallel=1 $dir  | tee -a $artifact_dir/test.log ; then
     log::info "======================================================="
     log::info "Logforwarding $dir passed"
@@ -73,5 +64,4 @@ for dir in $(ls -d $TEST_DIR); do
     oc delete $ns --ignore-not-found --force --grace-period=0||:
     try_until_failure "oc get $ns" "$((1 * $minute))"
   done
-done
 exit $failed
