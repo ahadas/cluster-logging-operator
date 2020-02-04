@@ -16,6 +16,7 @@ var templateRegistry = []string{
 	storeElasticsearchTemplate,
 	forwardTemplate,
 	storeLegacySyslogTemplate,
+	storeSyslogTemplate,
 }
 
 const fluentConfTemplate = `{{- define "fluentConf" }}
@@ -570,7 +571,35 @@ const storeLegacySyslogTemplate = `{{- define "storeLegacySyslog" }}
 <store>
 	@type {{.SyslogLegacyPlugin}}
 	@id {{.StoreID}}
+{{ if .LegacySyslogPlugin }}
 	remote_syslog {{.Host}}
+{{ else }}
+	host {{.Host}}
+{{- end }}
+{{ if .Target.Secret }}
+	protocol tcp
+	tls true
+	ca_file '{{ .SecretPath "ca.pem" }}'
+{{ else if not .LegacySyslogPlugin }}
+	protocol {{ .SyslogProtocol }}
+{{- end}}
+	port {{.Port}}
+	hostname ${hostname}
+	facility user
+	severity debug
+</store>
+{{- end}}`
+
+const storeSyslogTemplate = `{{- define "storeSyslog" }}
+<store>
+	@type remote_syslog
+	@id {{.StoreID}}
+	host {{.Host}}
+{{ if .Target.Secret }}
+	protocol tcp
+	tls true
+	ca_file '{{ .SecretPath "ca.pem" }}'
+{{- end}}
 	port {{.Port}}
 	hostname ${hostname}
 	facility user

@@ -105,4 +105,73 @@ var _ = Describe("Generating external syslog server output store config blocks",
 			})
 		})
 	})
+
+	Context("for an secure endpoint", func() {
+		BeforeEach(func() {
+			outputs = []logging.OutputSpec{
+				{
+					Type:     logging.OutputTypeSyslog,
+					Name:     "syslog-receiver",
+					Endpoint: "sl.svc.messaging.cluster.local:9654",
+					Secret: &logging.OutputSecretSpec{
+						Name: "my-syslog-secret",
+					},
+				},
+			}
+		})
+		It("should produce well formed output label config", func() {
+			results, err := generator.generateOutputLabelBlocks(outputs)
+			Expect(err).To(BeNil())
+			Expect(len(results)).To(Equal(1))
+			test.Expect(results[0]).ToEqual(`<label @SYSLOG_RECEIVER>
+	<match **>
+	   @type copy
+	   <store>
+ 	     @type remote_syslog
+	     @id syslog_receiver
+	     host sl.svc.messaging.cluster.local
+             protocol tcp
+             tls true
+             ca_file '/var/run/ocp-collector/secrets/my-syslog-secret/ca.pem'
+	     port 9654
+	     hostname ${hostname}
+	     facility user
+	     severity debug
+	   </store>
+	</match>
+</label>`)
+		})
+	})
+
+	Context("for a udp endpoint", func() {
+		BeforeEach(func() {
+			outputs = []logging.OutputSpec{
+				{
+					Type:     logging.OutputTypeSyslog,
+					Name:     "syslog-receiver",
+					Endpoint: "udp://sl.svc.messaging.cluster.local:9654",
+				},
+			}
+		})
+		It("should produce well formed output label config", func() {
+			results, err := generator.generateOutputLabelBlocks(outputs)
+			Expect(err).To(BeNil())
+			Expect(len(results)).To(Equal(1))
+			test.Expect(results[0]).ToEqual(`<label @SYSLOG_RECEIVER>
+	<match **>
+	   @type copy
+	   <store>
+ 	     @type remote_syslog
+	     @id syslog_receiver
+	     host sl.svc.messaging.cluster.local
+	     protocol udp
+	     port 9654
+	     hostname ${hostname}
+	     facility user
+	     severity debug
+	   </store>
+	</match>
+</label>`)
+		})
+	})
 })
