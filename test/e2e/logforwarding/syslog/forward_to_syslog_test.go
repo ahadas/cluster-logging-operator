@@ -139,7 +139,7 @@ var _ = Describe("LogForwarding", func() {
 			})
 		})
 
-		Context("and the udp receiver is unsecure", func() {
+		FContext("and the udp receiver is unsecure", func() {
 
 			BeforeEach(func() {
 				if syslogDeployment, err = e2e.DeploySyslogReceiver(pwd, false, "udp"); err != nil {
