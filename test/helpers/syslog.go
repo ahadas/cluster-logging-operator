@@ -3,6 +3,8 @@ package helpers
 import (
 	"errors"
 	"fmt"
+	"math/rand"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +30,24 @@ const (
 # Provides TCP syslog reception
 # for parameters see http://www.rsyslog.com/doc/imtcp.html
 module(load="imtcp") # needs to be done just once
+input(type="imtcp" port="24224" ruleset="test")
+
+#### RULES ####
+ruleset(name="test"){
+    action(type="omfile" file="/var/log/infra.log")
+}
+	`
+	secureSyslogConfTemplate = `
+# make gtls driver the default
+$DefaultNetstreamDriver gtls
+
+# certificate files
+$DefaultNetstreamDriverCAFile /etc/rsyslog/secrets/ca.pem
+$DefaultNetstreamDriverCertFile /etc/rsyslog/secrets/server.crt
+$DefaultNetstreamDriverKeyFile /etc/rsyslog/secrets/server.key
+
+# provides TCP syslog reception with encryption
+module(load="imtcp" StreamDriver.Name="gtls" StreamDriver.Mode="1" StreamDriver.AuthMode="anon")
 input(type="imtcp" port="24224" ruleset="test")
 
 #### RULES ####
@@ -133,7 +153,7 @@ func (tc *E2ETestFramework) createSyslogRbac(name string) (err error) {
 	return nil
 }
 
-func (tc *E2ETestFramework) DeploySyslogReceiver(rootDir string) (deployment *apps.Deployment, err error) {
+func (tc *E2ETestFramework) DeploySyslogReceiver(pwd string, secure bool) (deployment *apps.Deployment, err error) {
 	logStore := &syslogReceiverLogStore{
 		tc: tc,
 	}
@@ -177,6 +197,30 @@ func (tc *E2ETestFramework) DeploySyslogReceiver(rootDir string) (deployment *ap
 	}
 
 	rsyslogConf := unsecureSyslogConf
+	if secure {
+		rsyslogConf = secureSyslogConfTemplate
+		secret, err := tc.CreateSyslogSecret(pwd, syslogReceiverName, syslogReceiverName, map[string][]byte{})
+		if err != nil {
+			return nil, err
+		}
+		tc.AddCleanup(func() error {
+			return tc.KubeClient.Core().Secrets(OpenshiftLoggingNS).Delete(syslogReceiverName, nil)
+		})
+		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
+			Name:      "certs",
+			ReadOnly:  true,
+			MountPath: "/etc/rsyslog/secrets",
+		})
+		podSpec.Containers = []corev1.Container{container}
+		podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
+			Name: "certs", VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: secret.Name,
+				},
+			},
+		})
+	}
+
 	config := k8shandler.NewConfigMap(container.Name, OpenshiftLoggingNS, map[string]string{
 		"rsyslog.conf": rsyslogConf,
 	})
@@ -227,4 +271,36 @@ func (tc *E2ETestFramework) DeploySyslogReceiver(rootDir string) (deployment *ap
 	logStore.deployment = syslogDeployment
 	tc.LogStore = logStore
 	return syslogDeployment, tc.waitForDeployment(OpenshiftLoggingNS, syslogDeployment.Name, defaultRetryInterval, defaultTimeout)
+}
+
+func (tc *E2ETestFramework) CreateSyslogSecret(pwd, logStoreName, secretName string, otherData map[string][]byte) (secret *corev1.Secret, err error) {
+	workingDir := fmt.Sprintf("/tmp/clo-test-%d", rand.Intn(10000))
+	logger.Debugf("Generating Pipeline certificates for %q to %s", logStoreName, workingDir)
+	if _, err := os.Stat(workingDir); os.IsNotExist(err) {
+		if err = os.MkdirAll(workingDir, 0766); err != nil {
+			return nil, err
+		}
+	}
+	if err = os.Setenv("WORKING_DIR", workingDir); err != nil {
+		return nil, err
+	}
+	script := fmt.Sprintf("%s/syslog_cert_generation.sh", pwd)
+	if err = k8shandler.RunCertificatesScript(OpenshiftLoggingNS, logStoreName, workingDir, script); err != nil {
+		return nil, err
+	}
+	data := map[string][]byte{
+		"ca.pem":     utils.GetWorkingDirFileContents("ca-syslog.crt"),
+		"server.crt": utils.GetWorkingDirFileContents("syslog-server.crt"),
+		"server.key": utils.GetWorkingDirFileContents("syslog-server.key"),
+	}
+	secret = k8shandler.NewSecret(
+		secretName,
+		OpenshiftLoggingNS,
+		data,
+	)
+	logger.Debugf("Creating secret %s for logStore %s", secret.Name, logStoreName)
+	if secret, err = tc.KubeClient.Core().Secrets(OpenshiftLoggingNS).Create(secret); err != nil {
+		return nil, err
+	}
+	return secret, nil
 }

@@ -568,9 +568,18 @@ const storeElasticsearchTemplate = `{{- define "storeElasticsearch" }}
 
 const storeSyslogTemplate = `{{- define "storeSyslog" }}
 <store>
-	@type syslog_buffered
+	@type {{.SyslogPlugin}}
 	@id {{.StoreID}}
+{{ if .LegacySyslogPlugin }}
 	remote_syslog {{.Host}}
+{{ else }}
+	host {{.Host}}
+{{- end }}
+{{ if .Target.Secret }}
+	protocol tcp
+	tls true
+	ca_file '{{ .SecretPath "ca.pem" }}'
+{{- end}}
 	port {{.Port}}
 	hostname ${hostname}
 	facility user

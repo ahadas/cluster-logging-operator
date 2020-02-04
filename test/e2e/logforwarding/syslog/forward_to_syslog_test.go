@@ -22,20 +22,20 @@ var _ = Describe("LogForwarding", func() {
 		err              error
 		syslogDeployment *apps.Deployment
 		e2e              = helpers.NewE2ETestFramework()
-		rootDir          string
+		pwd              string
 	)
 	BeforeEach(func() {
 		if err := e2e.DeployLogGenerator(); err != nil {
 			logger.Errorf("unable to deploy log generator. E: %s", err.Error())
 		}
-		rootDir = filepath.Join(filepath.Dir(filename), "..", "..", "..", "..", "/")
+		pwd = filepath.Dir(filename)
 	})
 	Describe("when ClusterLogging is configured with 'forwarding' to an external syslog server", func() {
 
-		Context("and the receiver is unsecured", func() {
+		Context("and the tcp receiver is unsecured", func() {
 
 			BeforeEach(func() {
-				if syslogDeployment, err = e2e.DeploySyslogReceiver(rootDir); err != nil {
+				if syslogDeployment, err = e2e.DeploySyslogReceiver(pwd, false); err != nil {
 					Fail(fmt.Sprintf("Unable to deploy syslog receiver: %v", err))
 				}
 				cr := helpers.NewClusterLogging(helpers.ComponentTypeCollector)
@@ -56,6 +56,61 @@ var _ = Describe("LogForwarding", func() {
 								Name:     syslogDeployment.ObjectMeta.Name,
 								Type:     logforward.OutputTypeSyslog,
 								Endpoint: fmt.Sprintf("%s.%s.svc:24224", syslogDeployment.ObjectMeta.Name, syslogDeployment.Namespace),
+							},
+						},
+						Pipelines: []logforward.PipelineSpec{
+							logforward.PipelineSpec{
+								Name:       "test-infra",
+								OutputRefs: []string{syslogDeployment.ObjectMeta.Name},
+								SourceType: logforward.LogSourceTypeInfra,
+							},
+						},
+					},
+				}
+				if err := e2e.CreateLogForwarding(forwarding); err != nil {
+					Fail(fmt.Sprintf("Unable to create an instance of logforwarding: %v", err))
+				}
+				components := []helpers.LogComponentType{helpers.ComponentTypeCollector}
+				for _, component := range components {
+					if err := e2e.WaitFor(component); err != nil {
+						Fail(fmt.Sprintf("Failed waiting for component %s to be ready: %v", component, err))
+					}
+				}
+
+			})
+
+			It("should send logs to the forward.Output logstore", func() {
+				Expect(e2e.LogStore.HasInfraStructureLogs(helpers.DefaultWaitForLogsTimeout)).To(BeTrue(), "Expected to find stored infrastructure logs")
+			})
+		})
+
+		Context("and the tcp receiver is secured", func() {
+
+			BeforeEach(func() {
+				if syslogDeployment, err = e2e.DeploySyslogReceiver(pwd, true); err != nil {
+					Fail(fmt.Sprintf("Unable to deploy syslog receiver: %v", err))
+				}
+				cr := helpers.NewClusterLogging(helpers.ComponentTypeCollector)
+				if err := e2e.CreateClusterLogging(cr); err != nil {
+					Fail(fmt.Sprintf("Unable to create an instance of cluster logging: %v", err))
+				}
+				forwarding := &logforward.LogForwarding{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       logforward.LogForwardingKind,
+						APIVersion: logforward.SchemeGroupVersion.String(),
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "instance",
+					},
+					Spec: logforward.ForwardingSpec{
+						Outputs: []logforward.OutputSpec{
+							logforward.OutputSpec{
+								Name:     syslogDeployment.ObjectMeta.Name,
+								Type:     logforward.OutputTypeSyslog,
+								Endpoint: fmt.Sprintf("%s.%s.svc:24224", syslogDeployment.ObjectMeta.Name, syslogDeployment.Namespace),
+								Secret: &logforward.OutputSecretSpec{
+									Name: syslogDeployment.ObjectMeta.Name,
+								},
 							},
 						},
 						Pipelines: []logforward.PipelineSpec{
