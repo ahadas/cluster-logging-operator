@@ -37,6 +37,17 @@ ruleset(name="test"){
     action(type="omfile" file="/var/log/infra.log")
 }
 	`
+udpSyslogConf = `
+# Provides UDP syslog reception
+# for parameters see http://www.rsyslog.com/doc/imudp.html
+module(load="imudp") # needs to be done just once
+input(type="imudp" port="24224" ruleset="test")
+
+#### RULES ####
+ruleset(name="test"){
+    action(type="omfile" file="/var/log/infra.log")
+}
+	`
 	secureSyslogConfTemplate = `
 # make gtls driver the default
 $DefaultNetstreamDriver gtls
@@ -153,7 +164,7 @@ func (tc *E2ETestFramework) createSyslogRbac(name string) (err error) {
 	return nil
 }
 
-func (tc *E2ETestFramework) DeploySyslogReceiver(pwd string, secure bool) (deployment *apps.Deployment, err error) {
+func (tc *E2ETestFramework) DeploySyslogReceiver(pwd string, secure bool, protocol string) (deployment *apps.Deployment, err error) {
 	logStore := &syslogReceiverLogStore{
 		tc: tc,
 	}
@@ -196,7 +207,8 @@ func (tc *E2ETestFramework) DeploySyslogReceiver(pwd string, secure bool) (deplo
 		ServiceAccountName: serviceAccount.Name,
 	}
 
-	rsyslogConf := unsecureSyslogConf
+	var rsyslogConf string
+	portProtocol := corev1.ProtocolTCP
 	if secure {
 		rsyslogConf = secureSyslogConfTemplate
 		secret, err := tc.CreateSyslogSecret(pwd, syslogReceiverName, syslogReceiverName, map[string][]byte{})
@@ -219,6 +231,11 @@ func (tc *E2ETestFramework) DeploySyslogReceiver(pwd string, secure bool) (deplo
 				},
 			},
 		})
+	} else if protocol == "udp" {
+		rsyslogConf = udpSyslogConf
+		portProtocol = corev1.ProtocolUDP
+	} else {
+		rsyslogConf = unsecureSyslogConf
 	}
 
 	config := k8shandler.NewConfigMap(container.Name, OpenshiftLoggingNS, map[string]string{
@@ -250,7 +267,8 @@ func (tc *E2ETestFramework) DeploySyslogReceiver(pwd string, secure bool) (deplo
 		serviceAccount.Name,
 		[]corev1.ServicePort{
 			{
-				Port: 24224,
+				Protocol: portProtocol,
+				Port:     24224,
 			},
 		},
 	)

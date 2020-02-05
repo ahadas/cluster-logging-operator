@@ -35,7 +35,7 @@ var _ = Describe("LogForwarding", func() {
 		Context("and the tcp receiver is unsecured", func() {
 
 			BeforeEach(func() {
-				if syslogDeployment, err = e2e.DeploySyslogReceiver(pwd, false); err != nil {
+				if syslogDeployment, err = e2e.DeploySyslogReceiver(pwd, false, "tcp"); err != nil {
 					Fail(fmt.Sprintf("Unable to deploy syslog receiver: %v", err))
 				}
 				cr := helpers.NewClusterLogging(helpers.ComponentTypeCollector)
@@ -87,7 +87,7 @@ var _ = Describe("LogForwarding", func() {
 		Context("and the tcp receiver is secured", func() {
 
 			BeforeEach(func() {
-				if syslogDeployment, err = e2e.DeploySyslogReceiver(pwd, true); err != nil {
+				if syslogDeployment, err = e2e.DeploySyslogReceiver(pwd, true, "tcp"); err != nil {
 					Fail(fmt.Sprintf("Unable to deploy syslog receiver: %v", err))
 				}
 				cr := helpers.NewClusterLogging(helpers.ComponentTypeCollector)
@@ -111,6 +111,58 @@ var _ = Describe("LogForwarding", func() {
 								Secret: &logforward.OutputSecretSpec{
 									Name: syslogDeployment.ObjectMeta.Name,
 								},
+							},
+						},
+						Pipelines: []logforward.PipelineSpec{
+							logforward.PipelineSpec{
+								Name:       "test-infra",
+								OutputRefs: []string{syslogDeployment.ObjectMeta.Name},
+								SourceType: logforward.LogSourceTypeInfra,
+							},
+						},
+					},
+				}
+				if err := e2e.CreateLogForwarding(forwarding); err != nil {
+					Fail(fmt.Sprintf("Unable to create an instance of logforwarding: %v", err))
+				}
+				components := []helpers.LogComponentType{helpers.ComponentTypeCollector}
+				for _, component := range components {
+					if err := e2e.WaitFor(component); err != nil {
+						Fail(fmt.Sprintf("Failed waiting for component %s to be ready: %v", component, err))
+					}
+				}
+
+			})
+
+			It("should send logs to the forward.Output logstore", func() {
+				Expect(e2e.LogStore.HasInfraStructureLogs(helpers.DefaultWaitForLogsTimeout)).To(BeTrue(), "Expected to find stored infrastructure logs")
+			})
+		})
+
+		Context("and the udp receiver is unsecure", func() {
+
+			BeforeEach(func() {
+				if syslogDeployment, err = e2e.DeploySyslogReceiver(pwd, false, "udp"); err != nil {
+					Fail(fmt.Sprintf("Unable to deploy syslog receiver: %v", err))
+				}
+				cr := helpers.NewClusterLogging(helpers.ComponentTypeCollector)
+				if err := e2e.CreateClusterLogging(cr); err != nil {
+					Fail(fmt.Sprintf("Unable to create an instance of cluster logging: %v", err))
+				}
+				forwarding := &logforward.LogForwarding{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       logforward.LogForwardingKind,
+						APIVersion: logforward.SchemeGroupVersion.String(),
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "instance",
+					},
+					Spec: logforward.ForwardingSpec{
+						Outputs: []logforward.OutputSpec{
+							logforward.OutputSpec{
+								Name:     syslogDeployment.ObjectMeta.Name,
+								Type:     logforward.OutputTypeSyslog,
+								Endpoint: fmt.Sprintf("udp://%s.%s.svc:24224", syslogDeployment.ObjectMeta.Name, syslogDeployment.Namespace),
 							},
 						},
 						Pipelines: []logforward.PipelineSpec{

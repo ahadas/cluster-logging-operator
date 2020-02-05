@@ -579,6 +579,8 @@ const storeSyslogTemplate = `{{- define "storeSyslog" }}
 	protocol tcp
 	tls true
 	ca_file '{{ .SecretPath "ca.pem" }}'
+{{ else if not .LegacySyslogPlugin }}
+	protocol {{ .SyslogProtocol }}
 {{- end}}
 	port {{.Port}}
 	hostname ${hostname}

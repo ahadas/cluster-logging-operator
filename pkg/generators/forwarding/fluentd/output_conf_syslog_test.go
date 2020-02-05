@@ -87,4 +87,36 @@ var _ = Describe("Generating external syslog server output store config blocks",
 </label>`)
 		})
 	})
+
+	Context("for a udp endpoint", func() {
+		BeforeEach(func() {
+			outputs = []logging.OutputSpec{
+				{
+					Type:     logging.OutputTypeSyslog,
+					Name:     "syslog-receiver",
+					Endpoint: "udp://sl.svc.messaging.cluster.local:9654",
+				},
+			}
+		})
+		It("should produce well formed output label config", func() {
+			results, err := generator.generateOutputLabelBlocks(outputs)
+			Expect(err).To(BeNil())
+			Expect(len(results)).To(Equal(1))
+			test.Expect(results[0]).ToEqual(`<label @SYSLOG_RECEIVER>
+	<match **>
+	   @type copy
+	   <store>
+ 	     @type remote_syslog
+	     @id syslog_receiver
+	     host sl.svc.messaging.cluster.local
+	     protocol udp
+	     port 9653
+	     hostname ${hostname}
+	     facility user
+	     severity debug
+	   </store>
+	</match>
+</label>`)
+		})
+	})
 })
